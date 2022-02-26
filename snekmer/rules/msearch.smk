@@ -1,6 +1,5 @@
-"""search.smk: Module for searching models against input proteins.
-This is for application of a single model to proteins.
-See msearch.smk for searches of multiple models.
+"""msearch.smk: Module for searches of models against protein sequences.
+JEM: In progress.
 
 author: @christinehc, @biodataganache
 """
@@ -84,6 +83,11 @@ skm.alphabet.check_valid(config["alphabet"])
 out_dir = skm.io.define_output_dir(config['alphabet'], config['k'],
                                    nested=config['output']['nested_dir'])
 
+# added for msearch
+
+# define the root directory for the models that are being searched
+model_dir = config["input"]["model_directory"]
+
 # define output files to be created by snekmer
 rule all:
     input:
@@ -125,7 +129,7 @@ use rule unzip from process_input with:
 # build kmer count vectors for each basis set
 # JEM: vectorize_search doesn't depend on preprocessing
 #      for inputs - takes directly from configfile
-use rule vectorize_search from kmerize with:
+use rule vectorize_msearch from kmerize with:
     input:
         #kmers=join(out_dir, "labels", "{nb}.txt"),
         #params=join(out_dir, "processed", "{nb}.json"),
@@ -137,16 +141,17 @@ use rule vectorize_search from kmerize with:
                      fa=FAS)
 
 # JEM: all I've done so far is to change the name of the rule
-rule search:
+rule msearch:
     input:
         vecfile=rules.vectorize_search.output.files
+        model_files = join(model_dir, "output", "model", "*.pkl")
+        model_score_files = join(model_dir, "output", "score", "*.pkl")
+        model_feature_files = join(model_dir, "output", "features","*.txt")
+
     output:
         results=join(out_dir, "model", "results", "{nb}.csv")
         #figs=directory(join(out_dir, "model", "figures", "{nb}"))
     run:
-        new_basis = []
-        with open(config["input"]["feature_set"], "r") as f:
-            new_basis = skm.io.read_output_kmers(config["input"]["feature_set"])
 
         #new_vec_file = "snekmer-app-4/output/features/input/input.json.gz"
         #new_basis_file = "snekmer-app-4/output/labels/input.txt"
@@ -161,20 +166,28 @@ rule search:
         #model_file = "snekmer/output/model/TS.pkl"
         #scorer_file = "snekmer/output/score/TS.pkl"
 
-        # JEM: for now we'll specify the model we want
-        #      to run in the config file
-        model_file = config["input"]["model_file"]
-        score_file = config["input"]["score_file"]
-
+        # will this work? I think this is how snakemake does things
         # load model
-        with open(model_file, 'rb') as mf:
+        with open(input.model_files, 'rb') as mf:
             model = pickle.load(mf)
 
         #load scorer
-        with open(score_file, 'rb') as sf:
+        with open(input.model_score_files, 'rb') as sf:
             scorer = pickle.load(sf)
 
-        new_scores = scorer.predict(new_vecs, new_basis)
+        new_basis = []
+        with open(input.model_feature_files) as f:
+            new_basis = skm.io.read_output_kmers(f)
+
+        # we need to make the new vectors conform to the model vectors
+        #    This step is important - and it may be the case that the
+        #    model includes kmers that the new_vecs doesn't - these
+        #    should be 0s
+        # this goes beyond my abilities :)
+
+        model_vecs = new_vecs[,new_basis]
+
+        new_scores = scorer.predict(model_vecs, new_basis)
         predictions = model.predict(new_scores.reshape(-1,1))
 
         results['predicted'] = [True if p==1 else False for p in predictions]

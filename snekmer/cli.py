@@ -73,7 +73,7 @@ def main():
     clust.add_argument('--jobs', metavar='N', type=int, default=1000, help='number of simultaneous jobs to submit to a slurm queue')
 
     # create subparsers for both operation modes
-    parser.add_argument("mode", choices=['model', 'cluster', 'search'])
+    parser.add_argument("mode", choices=['model', 'cluster', 'search', 'msearch'])
 
     # parse args
     args = parser.parse_args()
@@ -130,6 +130,22 @@ def main():
 
     elif args.mode == 'search':
         snakemake(resource_filename('snekmer', 'rules/search.smk'),
+                          configfiles=[args.configfile],
+                          config=config,
+                          cluster_config=args.cluster,
+                          cluster=cluster,
+                          keepgoing=True,
+                          force_incomplete=True,
+                          cores=args.cores,
+                          nodes=args.jobs,
+                          dryrun=args.dryrun,
+                          unlock=args.unlock,
+                          until=args.until,
+                          touch=args.touch,
+                          latency_wait=args.latency)
+                          
+    elif args.mode == 'msearch':
+        snakemake(resource_filename('snekmer', 'rules/msearch.smk'),
                           configfiles=[args.configfile],
                           config=config,
                           cluster_config=args.cluster,
